@@ -273,7 +273,7 @@
         let namaUser = currentUser.name;
         let namaProduk = prod.name;
         let finalHarga = prod.finalTotal || (prod.price + 500);
-        let pesan = `📜 DATA PEMBELI BARU\n
+        let pesan = `📜 DATA PEMBELI BARU
 ━━━━━━━━━━━━━━━━━━━━━⨳\n
 🪪 𝗜𝗗𝗘𝗡𝗧𝗜𝗧𝗔𝗦 𝗣𝗘𝗠𝗕𝗘𝗟𝗜\n├⌑ 👤 𝗡𝗮𝗺𝗮 : ${namaUser}\n├⌑ 🛒 𝗣𝗿𝗼𝗱𝘂𝗸 : ${namaProduk}\n├⌑ 💰 𝗛𝗮𝗿𝗴𝗮 : ${finalHarga.toLocaleString()}\n╰⌑ ⏰ 𝗪𝗮𝗸𝘁𝘂 : ${waktu}\n\n
 📨 𝗧𝗲𝗿𝗶𝗺𝗮𝗸𝗮𝘀𝗶𝗵 𝗦𝘂𝗱𝗮𝗵 𝗕𝗲𝗹𝗮𝗻𝗷𝗮 𝗗𝗶 :\n➥ SenzShop Order [ SS BUKTI PEMBAYARAN ]`;
