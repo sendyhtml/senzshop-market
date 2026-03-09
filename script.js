@@ -11,43 +11,32 @@
       { id: 8, name: "SC SENZHOST MD", price: 10000, stock: 99 }
     ];
 
-    // KODE PROMO statis (bisa diedit oleh pemilik)
+    // KODE PROMO statis
     const validPromos = { "SENZ2": 25 }; // diskon persen
 
-    // STATE GLOBAL - Menggunakan localStorage agar data tetap ada
+    // STATE GLOBAL
     let cartItems = [];
     let orders = [];
     let currentUser = { name: "Senz User", username: "senz", pass: "123", isLoggedIn: false };
-    let selectedProduct = null; // untuk detail
-    let confirmProduct = null; // saat beli sekarang
+    let selectedProduct = null;
+    let confirmProduct = null; // produk yang akan dibeli (dengan total dll)
+    let qrisTimerInterval = null;
 
     // Load data dari localStorage
     function loadFromStorage() {
       try {
-        // Load cart items
         const savedCart = localStorage.getItem('senzshop_cart');
-        if (savedCart) {
-          cartItems = JSON.parse(savedCart);
-        }
-        
-        // Load orders
+        if (savedCart) cartItems = JSON.parse(savedCart);
         const savedOrders = localStorage.getItem('senzshop_orders');
-        if (savedOrders) {
-          orders = JSON.parse(savedOrders);
-        }
-        
-        // Load user session
+        if (savedOrders) orders = JSON.parse(savedOrders);
         const savedUser = localStorage.getItem('senzshop_user');
         if (savedUser) {
           const userData = JSON.parse(savedUser);
           currentUser = { ...currentUser, ...userData };
         }
-      } catch (e) {
-        console.log('Error loading from storage', e);
-      }
+      } catch (e) { console.log('Error loading from storage', e); }
     }
     
-    // Simpan data ke localStorage
     function saveToStorage() {
       localStorage.setItem('senzshop_cart', JSON.stringify(cartItems));
       localStorage.setItem('senzshop_orders', JSON.stringify(orders));
@@ -62,6 +51,7 @@
     const dashboardPage = document.getElementById('dashboardPage');
     const detailPage = document.getElementById('detailPage');
     const confirmPage = document.getElementById('confirmPage');
+    const qrisPage = document.getElementById('qrisPage');
     const cartPage = document.getElementById('cartPage');
     const orderPage = document.getElementById('orderPage');
     const profilePage = document.getElementById('profilePage');
@@ -69,28 +59,25 @@
     const productListDiv = document.getElementById('productList');
     const detailContainer = document.getElementById('detailContainer');
     const confirmContainer = document.getElementById('confirmContainer');
+    const qrisContainer = document.getElementById('qrisContainer');
     const cartList = document.getElementById('cartList');
     const orderList = document.getElementById('orderList');
     const profileNameInput = document.getElementById('profileNameInput');
     const displayNameSpan = document.getElementById('displayName');
 
     // login/register toggle
-    const loginFormDiv = document.getElementById('loginForm');
-    const registerFormDiv = document.getElementById('registerForm');
     document.getElementById('showLoginTab').addEventListener('click', ()=>{
-      loginFormDiv.style.display = 'block';
-      registerFormDiv.style.display = 'none';
+      document.getElementById('loginForm').style.display = 'block';
+      document.getElementById('registerForm').style.display = 'none';
     });
     document.getElementById('showRegisterTab').addEventListener('click', ()=>{
-      loginFormDiv.style.display = 'none';
-      registerFormDiv.style.display = 'block';
+      document.getElementById('loginForm').style.display = 'none';
+      document.getElementById('registerForm').style.display = 'block';
     });
 
     // login action
     document.getElementById('loginBtn').addEventListener('click', ()=>{
       let user = document.getElementById('loginUser').value.trim() || "senz";
-      let pass = document.getElementById('loginPass').value;
-      // simple login, terima semua
       currentUser.name = user;
       currentUser.isLoggedIn = true;
       saveToStorage();
@@ -114,11 +101,10 @@
       loginPage.classList.add('active-page');
       hideAllPages();
       bottomNav.style.display = 'none';
-      loginFormDiv.style.display = 'block';
-      registerFormDiv.style.display = 'none';
+      document.getElementById('loginForm').style.display = 'block';
+      document.getElementById('registerForm').style.display = 'none';
     });
 
-    // update tampilan setelah login
     function updateUIafterLogin() {
       displayNameSpan.innerText = currentUser.name;
       profileNameInput.value = currentUser.name;
@@ -178,10 +164,8 @@
       });
     }
 
-    // halaman konfirmasi
+    // halaman konfirmasi (sebelum QRIS)
     function showConfirmPage(prod) {
-      let diskon = 0;
-      let promoCode = '';
       let hargaAsli = prod.price;
       let admin = 500;
       let total = hargaAsli + admin;
@@ -211,34 +195,103 @@
         let newTotal = hargaAsli - diskonRp + admin;
         document.getElementById('diskonText').innerText = discount ? `${discount}% (Rp${diskonRp.toLocaleString()})` : 'Tidak Ada diskon';
         document.getElementById('totalHargaSpan').innerText = 'Rp' + newTotal.toLocaleString();
-        // simpan ke confirmProduct sementara untuk total
         confirmProduct.finalTotal = newTotal;
         confirmProduct.diskon = discount;
       });
 
       document.getElementById('confirmBuyNow').addEventListener('click', ()=>{
         let finalHarga = confirmProduct.finalTotal || (hargaAsli+admin);
+        confirmProduct.finalTotal = finalHarga; // simpan
+        // langsung buka halaman QRIS
+        showQrisPage(confirmProduct);
+      });
+    }
+
+    // HALAMAN QRIS
+    function showQrisPage(prod) {
+      // Hentikan timer sebelumnya jika ada
+      if (qrisTimerInterval) clearInterval(qrisTimerInterval);
+      
+      const total = prod.finalTotal || prod.price + 500; // fallback
+      const qrImageUrl = 'https://files.catbox.moe/yfs01y.jpg'; // QRIS sesuai permintaan
+      
+      let html = `
+        <div class="qris-box">
+          <h3>Scan QRIS untuk membayar</h3>
+          <img src="${qrImageUrl}" class="qris-image" alt="QRIS">
+          <div class="qris-total">Rp ${total.toLocaleString()}</div>
+          <div class="countdown-timer" id="qrisTimer">06:00</div>
+          <div class="qris-note">
+            <i class="fas fa-info-circle"></i> Scan QRIS di atas sesuai total harga, dengan batas waktu 6 menit.<br>
+            Kirim bukti SS dengan klik Konfirmasi.
+          </div>
+          <div class="flex-row">
+            <button class="btn-cancel" id="cancelQrisBtn">Batalkan</button>
+            <button class="btn-confirm" id="confirmQrisBtn">Konfirmasi</button>
+          </div>
+          <p style="margin-top:16px; font-size:11px; color:#aaa;">batas waktu 6:00 menit</p>
+        </div>
+      `;
+      qrisContainer.innerHTML = html;
+      goToPage('qris');
+
+      // Timer 6 menit (360 detik)
+      let timeLeft = 360; // 6 menit = 360 detik
+      const timerEl = document.getElementById('qrisTimer');
+      
+      function updateTimerDisplay() {
+        const minutes = Math.floor(timeLeft / 60);
+        const seconds = timeLeft % 60;
+        timerEl.innerText = `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+      }
+      updateTimerDisplay();
+
+      qrisTimerInterval = setInterval(() => {
+        timeLeft -= 1;
+        updateTimerDisplay();
+        if (timeLeft <= 0) {
+          clearInterval(qrisTimerInterval);
+          timerEl.innerText = '00:00';
+          alert('Waktu pembayaran habis, silakan ulangi.');
+          goToPage('dashboard'); // kembali dashboard
+        }
+      }, 1000);
+
+      // Tombol BATALKAN (kembali ke halaman konfirmasi)
+      document.getElementById('cancelQrisBtn').addEventListener('click', () => {
+        clearInterval(qrisTimerInterval);
+        showConfirmPage(prod); // kembali ke konfirmasi dengan produk yang sama
+      });
+
+      // Tombol KONFIRMASI (kirim ke telegram + simpan pesanan)
+      document.getElementById('confirmQrisBtn').addEventListener('click', () => {
+        clearInterval(qrisTimerInterval);
+        
+        // Siapkan pesan telegram
         let now = new Date();
         let waktu = now.toLocaleString('id-ID', { hour:'2-digit', minute:'2-digit', day:'2-digit', month:'2-digit', year:'numeric' }).replace(',','');
         let namaUser = currentUser.name;
-        let namaProduk = confirmProduct.name;
-        let pesan = `📜 DATA PEMBELI BARU\n━━━━━━━━━━━━━━━━━━━━━⨳\n🪪 𝗜𝗗𝗘𝗡𝗧𝗜𝗧𝗔𝗦 𝗣𝗘𝗠𝗕𝗘𝗟𝗜\n├⌑ 👤 𝗡𝗮𝗺𝗮 : ${namaUser}\n├⌑ 🛒 𝗣𝗿𝗼𝗱𝘂𝗸 : ${namaProduk}\n├⌑ 💰 𝗛𝗮𝗿𝗴𝗮 : Rp${finalHarga.toLocaleString()}\n╰⌑ ⏰ 𝗪𝗮𝗸𝘁𝘂 : ${waktu} \n\n📨 𝗧𝗲𝗿𝗶𝗺𝗮𝗸𝗮𝘀𝗶𝗵 𝗦𝘂𝗱𝗮𝗵 𝗕𝗲𝗹𝗮𝗻𝗷𝗮 𝗗𝗶 :\n➥ SenzShop Order`;
+        let namaProduk = prod.name;
+        let finalHarga = prod.finalTotal || (prod.price + 500);
+        let pesan = `📜 DATA PEMBELI BARU\n
+━━━━━━━━━━━━━━━━━━━━━⨳\n
+🪪 𝗜𝗗𝗘𝗡𝗧𝗜𝗧𝗔𝗦 𝗣𝗘𝗠𝗕𝗘𝗟𝗜\n├⌑ 👤 𝗡𝗮𝗺𝗮 : ${namaUser}\n├⌑ 🛒 𝗣𝗿𝗼𝗱𝘂𝗸 : ${namaProduk}\n├⌑ 💰 𝗛𝗮𝗿𝗴𝗮 : ${finalHarga.toLocaleString()}\n╰⌑ ⏰ 𝗪𝗮𝗸𝘁𝘂 : ${waktu}\n\n
+📨 𝗧𝗲𝗿𝗶𝗺𝗮𝗸𝗮𝘀𝗶𝗵 𝗦𝘂𝗱𝗮𝗵 𝗕𝗲𝗹𝗮𝗻𝗷𝗮 𝗗𝗶 :\n➥ SenzShop Order [ SS BUKTI PEMBAYARAN ]`;
 
         // tambahkan ke riwayat pesanan
-        orders.push({ ...confirmProduct, tanggal: waktu, total: finalHarga });
+        orders.push({ ...prod, tanggal: waktu, total: finalHarga });
         saveToStorage();
         renderOrders();
 
-        // redirect ke telegram dengan encode
+        // redirect ke telegram
         let url = `https://t.me/sendyhosting?text=${encodeURIComponent(pesan)}`;
         window.open(url, '_blank');
-        alert('Pesanan diteruskan ke Telegram');
-        // kembali ke dashboard
+        alert('Pesanan diteruskan ke Telegram (jangan lupa kirim SS)');
         goToPage('dashboard');
       });
     }
 
-    // render keranjang dengan tombol Beli Sekarang
+    // render keranjang
     function renderCart() {
       if (cartItems.length === 0) {
         cartList.innerHTML = '<div style="text-align:center; margin-top:60px;">🛒 Keranjang kosong</div>';
@@ -261,14 +314,10 @@
       });
       cartList.innerHTML = html;
       
-      // Tambahkan event listener untuk semua tombol "Beli Sekarang" di keranjang
       document.querySelectorAll('.buy-from-cart').forEach(btn => {
         btn.addEventListener('click', (e) => {
           e.stopPropagation();
-          const productId = parseInt(btn.dataset.productId);
           const cartIndex = parseInt(btn.dataset.cartIndex);
-          
-          // Ambil produk dari keranjang
           const cartItem = cartItems[cartIndex];
           if (cartItem) {
             confirmProduct = {...cartItem};
@@ -278,7 +327,6 @@
       });
     }
 
-    // render pesanan
     function renderOrders() {
       if (orders.length === 0) {
         orderList.innerHTML = '<div style="text-align:center; margin-top:60px;">Belum ada pesanan</div>';
@@ -300,6 +348,7 @@
       if (page === 'dashboard') dashboardPage.classList.add('active-page');
       else if (page === 'detail') detailPage.classList.add('active-page');
       else if (page === 'confirm') confirmPage.classList.add('active-page');
+      else if (page === 'qris') qrisPage.classList.add('active-page');
       else if (page === 'cart') { cartPage.classList.add('active-page'); renderCart(); }
       else if (page === 'order') { orderPage.classList.add('active-page'); renderOrders(); }
       else if (page === 'profile') profilePage.classList.add('active-page');
@@ -330,6 +379,11 @@
     document.getElementById('backFromCart').addEventListener('click', ()=>goToPage('dashboard'));
     document.getElementById('backFromOrder').addEventListener('click', ()=>goToPage('dashboard'));
     document.getElementById('backFromProfile').addEventListener('click', ()=>goToPage('dashboard'));
+    document.getElementById('backFromQris').addEventListener('click', ()=>{
+      if (qrisTimerInterval) clearInterval(qrisTimerInterval);
+      if (confirmProduct) showConfirmPage(confirmProduct);
+      else goToPage('dashboard');
+    });
 
     // update profile
     document.getElementById('updateProfileBtn').addEventListener('click', ()=>{
@@ -342,22 +396,16 @@
     // Inisialisasi aplikasi
     function initApp() {
       loadFromStorage();
-      
-      // Cek apakah user sudah login
       if (currentUser.isLoggedIn) {
-        // Langsung ke dashboard tanpa perlu login ulang
         goToPage('dashboard');
         updateUIafterLogin();
       } else {
-        // Tampilkan halaman login
         loginPage.classList.add('active-page');
         bottomNav.style.display = 'none';
       }
     }
     
-    // Jalankan inisialisasi
     initApp();
-    
     window.goToPage = goToPage;
 
   })();
