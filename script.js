@@ -12,7 +12,7 @@
     ];
 
     // KODE PROMO statis (bisa diedit oleh pemilik)
-    const validPromos = { "SENZ1": 20 }; // diskon persen
+    const validPromos = { "SENZ2": 25 }; // diskon persen
 
     // STATE GLOBAL - Menggunakan localStorage agar data tetap ada
     let cartItems = [];
